@@ -1,0 +1,195 @@
+#!/usr/bin/perl
+
+use Time::HiRes;
+use File::Copy;
+use IO::Socket;
+
+use strict;
+use MobaConf;
+use Daemon;
+use MLog;
+
+# $_::REMOTE_QUEUE_DIR
+# $_::REMOTE_QUEUE_FILE
+# $_::REMOTE_QUEUE_PORT
+# $_::REMOTE_QUEUE_HOST
+
+die "$_::REMOTE_QUEUE_DIR not exists\n" unless (-e $_::REMOTE_QUEUE_DIR);
+
+Daemon::exec(\&main);
+
+#-----------------------------------------------------------
+
+sub main {
+	
+	create_queue();
+	
+	my $sent = 0;
+	eval {
+		if ($sent = queue_send()) {
+			MLog::write("$_::LOG_DIR/queue_send", $sent);
+		}
+	};
+	if ($@) {
+		my $msg = $@;
+		if ($msg =~ /^Exception/) {
+			my $e = MException::getInfo();
+			$msg = MException::makeMsg($e);
+		}
+		MLog::write("$_::LOG_DIR/queue_send.err", $msg);
+	}
+	Daemon::sleep2(1) if ($sent == 0);
+}
+
+#-----------------------------------------------------------
+
+sub create_queue {
+	
+	if ((!-e  $_::REMOTE_QUEUE_FILE &&
+	     !-e "$_::REMOTE_QUEUE_FILE.use") ||
+	    scalar(<$_::REMOTE_QUEUE_FILE.use.*>)) {
+		return;
+	}
+	if ( -e  $_::REMOTE_QUEUE_FILE &&
+	    !-e "$_::REMOTE_QUEUE_FILE.use") {
+		move($_::REMOTE_QUEUE_FILE, "$_::REMOTE_QUEUE_FILE.use");
+		sleep(1);
+	}
+	
+	open(IN, "$_::REMOTE_QUEUE_FILE.use");
+	my @lines = <IN>;
+	close(IN);
+	
+	my $row = 1000;
+	my $num = 0;
+	
+	while (1) {
+		my $eof = 0;
+		my $file = "$_::REMOTE_QUEUE_FILE.use.". sprintf("%03d", $num);
+		open(OUT, ">$file") || die;
+		for (my $i =  $num      * $row;
+			    $i < ($num + 1) * $row;
+			    $i++) {
+			if (length($lines[$i]) > 0) {
+				print OUT $lines[$i];
+			} else {
+				$eof = 1;
+			}
+			$eof = 1 if ($i == $#lines);
+			last if ($eof);
+		}
+		close(OUT);
+		last if ($eof);
+		$num++;
+	}
+	unlink("$_::REMOTE_QUEUE_FILE.use");
+}
+
+#-----------------------------------------------------------
+
+sub queue_send {
+	my @list = <$_::REMOTE_QUEUE_FILE.use.*>;
+	
+	return 0 if (scalar(@list) == 0);
+	
+	my $_file = shift @list;
+	
+	my %data;
+	open(IN, "$_file");
+	while (<IN>) {
+		my (@line) = split("\t", $_);
+		next unless scalar(@line);
+
+		# 過渡期対応
+		my $host_no = 0;
+		if ($line[0] =~ /^\d+$/) {
+			$host_no = shift @line;
+		}
+
+		$data{$host_no} .= join("\t", @line);
+	}
+	close(IN);
+
+	my $length = 0;
+	for my $host_no (keys %data) {
+		send_data($_::REMOTE_QUEUE_HOST[$host_no], $_::REMOTE_QUEUE_PORT,
+			$data{$host_no});
+		$length += length($data{$host_no});
+	}
+
+	unlink("$_file");
+	print "send $_file\n";
+	
+	return $length;
+}
+
+#-----------------------------------------------------------
+
+sub send_data {
+	my ($host, $port, $data) = @_;
+
+	return if (length($data) == 0);
+	
+	my $sock = new IO::Socket::INET(
+		PeerAddr => $host,
+		PeerPort => $port,
+		Proto    => 'tcp',
+	);
+	if (!$sock) {
+		die "connect failed";
+	}
+	
+	#---------------
+	# データ送信
+	
+	_send_data($sock, 'QUE2'. pack('L', length($data)). $data);
+	
+	$sock->close();
+}
+
+#-----------------------------------------------------------
+
+sub _send_data {
+	my ($sock, $data) = @_;
+	
+	#---------------
+	# 送信
+	
+	alarm(30);
+	eval {
+		$SIG{ALRM} = sub { die "timeout\n" };
+		my $left = length($data);
+		
+		while (1) {
+			my $sz = $sock->send($data, MSG_NOSIGNAL);
+			die if ($sz == 0);
+			
+			$left -= $sz;
+			last if ($left == 0);
+			
+			alarm(5);
+			$data = substr($data, $sz);
+		}
+		alarm(0);
+	};
+	if ($@) {
+		die $@;
+	}
+	
+	#---------------
+	# 応答待ち
+	
+	my $buf = '';
+	alarm(30);
+	eval {
+		$SIG{ALRM} = sub { die "timeout\n" };
+		$sock->read($buf, 2);
+		alarm(0);
+	};
+	if ($@) {
+		print "$@\n";
+	}
+	die unless ($buf eq 'OK');
+	
+	print "OK\n";
+}

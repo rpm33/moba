@@ -1,0 +1,186 @@
+#!/usr/bin/perl
+
+use Time::HiRes;
+use IO::Socket;
+use IO::Select;
+
+use strict;
+use MobaConf;
+use Daemon;
+use MLog;
+
+# $_::REMOTE_QUEUE_DIR
+# $_::REMOTE_QUEUE_FILE
+# $_::REMOTE_QUEUE_PORT
+# $_::REMOTE_QUEUE_HOST
+
+my $TIMEOUT = 10;
+my $SOCK_S  = undef;
+my $SEL     = undef;
+my %CONN    = ();
+
+Daemon::exec(\&main, \&begin);
+
+#-----------------------------------------------------------
+# ½é´ü²½
+
+sub begin {
+	$SOCK_S = new IO::Socket::INET(
+		LocalPort => $_::REMOTE_QUEUE_PORT,
+		Listen    => SOMAXCONN,
+		Proto     => 'tcp',
+		Reuse     => 1,
+	);
+	die unless ($SOCK_S);
+	
+	$SEL = new IO::Select;
+	$SEL->add($SOCK_S);
+}
+
+#-----------------------------------------------------------
+
+sub main {
+	my $time = Time::HiRes::time();
+	
+	for my $sock ($SEL->handles()) {
+		next if ($sock eq $SOCK_S);
+		if ($CONN{$sock}{timeout} < $time) {
+			finish_sock($sock);
+		}
+	}
+	my @socks = $SEL->can_read(1);
+	for my $sock (@socks) {
+		if ($sock eq $SOCK_S) {
+			accept_sock($sock);
+		} else {
+			read_sock($sock);
+		}
+	}
+}
+
+#-----------------------------------------------------------
+
+sub accept_sock {
+	my $sock_s = shift;
+	
+	my $sock = $sock_s->accept();
+	my $sockaddr = $sock->peername();
+	my ($port, $iaddr) = unpack_sockaddr_in($sockaddr);
+	
+	$sock->blocking(0);
+	
+	my $addrname = inet_ntoa($iaddr);
+	my $hostname = gethostbyaddr($iaddr, AF_INET);
+	
+	$CONN{$sock} = {
+		sock    => $sock,
+		client  => "$hostname:$port",
+		timeout => Time::HiRes::time() + $TIMEOUT,
+		begin   => 1,
+		size    => 0,
+		data    => '',
+	};
+	
+	$SEL->add($sock);
+}
+
+#-----------------------------------------------------------
+
+sub read_sock {
+	my $sock = shift;
+	
+	if ($CONN{$sock}{begin}) {
+		my $buf;
+		my $sz = $sock->recv($buf, 8);
+		
+		unless ($buf =~ /^QUE2(....)/s) {
+			finish_sock($sock);
+			return;
+		}
+		my $size = unpack('L', $1);
+		
+		if ($size == 0) {
+			finish_sock($sock);
+			return;
+		}
+		$CONN{$sock}{size} = $size;
+	}
+	
+	my $buf;
+	$sock->recv($buf, $CONN{$sock}{size});
+	my $read_sz = length($buf);
+	
+	if ($read_sz == 0 && !$CONN{$sock}{begin}) {
+		finish_sock($sock);
+		return;
+	}
+	
+	$CONN{$sock}{begin} = 0;
+	$CONN{$sock}{size} -= $read_sz;
+	$CONN{$sock}{data} .= $buf;
+	$CONN{$sock}{timeout} = Time::HiRes::time() + $TIMEOUT;
+	
+	if ($CONN{$sock}{size} == 0) {
+		process_data($sock);
+		
+		$CONN{$sock}{begin} = 1;
+		$CONN{$sock}{size}  = 0;
+		$CONN{$sock}{data}  = '';
+		
+		return;
+	}
+}
+
+#-----------------------------------------------------------
+
+sub process_data {
+	my $sock = shift;
+	
+	my $data = $CONN{$sock}{data};
+	my $fh   = new FileHandle();
+	my $last_file = '';
+	
+	while ($data =~ /(.*)\n/g) {
+		next unless ($1 =~ /^([^\t]*)\t(.*)$/);
+		my ($file, $queue_data) = ($1, $2);
+		next if ($file =~ m#/#);
+		
+		my $queue_file =
+			($file =~ m#^log:(.*)$#) ?
+				"$_::LOG_DIR/$1" :
+			($file =~ m#^([^:]+):(.*)$#) ?
+				"$_::QUEUE_DIR/$1/$2" :
+				"$_::REMOTE_QUEUE_DIR/$file";
+		
+		if ($last_file ne $queue_file) {
+			close($fh);
+			if (!open($fh, ">>$queue_file")) {
+				MLog::write("$_::LOG_DIR/queue_recv.err",
+					"openerr\t$file\t$queue_data");
+				close($fh);
+				next;
+			}
+			$last_file = $queue_file;
+		}
+		print $fh "$queue_data\n";
+	}
+	close($fh);
+	
+	$sock->send('OK', MSG_NOSIGNAL);
+	$sock->flush();
+	
+	my $size = length($data);
+	print "$CONN{$sock}{client}:$size\n";
+	
+	MLog::write("$_::LOG_DIR/queue_recv", $size);
+}
+
+#-----------------------------------------------------------
+
+sub finish_sock {
+	my $sock = shift;
+	$SEL->remove($sock);
+	$sock->close();
+	delete($CONN{$sock});
+}
+

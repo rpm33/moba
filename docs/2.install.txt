@@ -1,0 +1,173 @@
+
+############################ インストール方法 ##########################
+
+
+### 動作環境
+
+           要求       確認環境
+CentOS     4.x / 5.x  4.5 (i386)
+Apache     1.3.x      1.3.41
+MySQL      5.0.x      5.0.51a
+perl       5.8.x      5.8.0
+fastcgi    2.4.x      2.4.6
+
+* perl モジュール（標準モジュール以外）
+
+DBI        1.604
+DBD::mysql 4.007
+FCGI       0.67
+
+http://www.apache.jp/misc/download.html
+http://www.fastcgi.com/dist/
+http://www.cpan.org/modules/by-module/FCGI/
+
+http://dev.mysql.com/downloads/mysql/5.0.html
+
+
+### MobaSif の基本設定
+
+
+* 環境変数の設定（設置ディレクトリを設定）
+
+ex) bash の場合
+  export MOBA_DIR=/home/moba
+  (.bashrc にも書いておく)
+
+* PATH を通す
+
+  $MOBA_DIR/script/tool
+  $MOBA_DIR/script/daemon
+
+export PATH=$MOBA_DIR/script/tool:$MOBA_DIR/script/daemon:$PATH
+(.bashrc にも書いておく)
+
+* アーカイブの中身を設置ディレクトリに移す
+ （基本的には /home/moba など、home ディレクトリ直下に展開）
+
+mv moba-0.9.0/* $MOBA_DIR/
+
+* xs モジュールのインストール
+
+cd $MOBA_DIR/src/xs
+
+sudo su
+./makexs MobaConf
+./makexs MTemplate
+./makexs Mcode
+./makexs Kcode
+./makexs SoftbankEncode
+./makexs HTMLFast
+exit
+
+* 設定値の置換
+
+cd $MOBA_DIR/conf
+find . -type f | xargs sed -i s:###MOBA_DIR###:$MOBA_DIR:g;
+find . -type f | xargs sed -i s/###PROJ_NAME###/{DB基本名}/g;
+find . -type f | xargs sed -i s/###USER###/$USER/g;
+find . -type f | xargs sed -i s/###GROUP###/{実行GROUP}/g;
+find . -type f | xargs sed -i s/###DOMAIN###/{web サーバのドメイン}/g;
+
+↑PROJ_NAME : DB 関係の名前に使われます。たとえば、'xxxx' にすると、
+              mysql に xxxx_w, xxxx_r ユーザが作られ、
+              xxxx_user, xxxx_seq などの DB が作られます。
+↑DOMAIN    : デフォルトではモバイルを http://DOMAIN/ で稼動、
+              PC だと http://www.DOMAIN/ にリダイレクトします。
+
+* 絵文字変換マップファイルの作成
+
+cd $MOBA_DIR/script2/mcode
+./make_mcode_dat.pl
+
+* テンプレートをとりあえず１回コンパイル
+
+compile_template
+
+
+
+### apache + mod_fastcgi のインストール
+
+
+* 手元に下記を用意
+
+  apache_1.3.41.tar.gz
+  FCGI-0.67.tar.gz
+  mod_fastcgi-2.4.6.tar.gz
+
+* インストール
+
+sudo su
+
+tar zxvfp apache_1.3.41.tar.gz
+tar zxvfp mod_fastcgi-2.4.6.tar.gz
+mv mod_fastcgi-2.4.6 apache_1.3.41/src/modules/fastcgi
+cd apache_1.3.41
+
+env OPTIM="-O2" ./configure \
+--prefix=/usr/local/apache \
+--enable-module=so \
+--enable-module=vhost_alias \
+--enable-module=rewrite \
+--enable-suexec \
+--suexec-caller=nobody \
+--suexec-docroot=/home \
+--activate-module=src/modules/fastcgi/libfastcgi.a
+
+make
+make install
+cd ..
+rm -rf apache_1.3.41
+
+tar zxvfp FCGI-0.67.tar.gz
+cd FCGI-0.67
+perl Makefile.PL
+make install
+cd ..
+rm -rf FCGI-0.67
+
+* 設定ファイル
+
+（参考設定をとりあえずそのまま使うなら）
+cp $MOBA_DIR/conf/sample/httpd.conf /usr/local/apache/conf/httpd.conf
+
+exit
+
+
+### MySQL
+
+sudo su
+
+rpm -ivh MySQL-shared-5.0.51a-0.i386.rpm
+rpm -ivh MySQL-client-5.0.51a-0.i386.rpm
+rpm -ivh MySQL-devel-5.0.51a-0.i386.rpm
+rpm -ivh MySQL-server-5.0.51a-0.i386.rpm
+
+tar zxvfp DBI-1.604.tar.gz
+cd        DBI-1.604; perl Makefile.PL; make install; cd ..
+rm -rf    DBI-1.604
+
+tar zxvfp DBD-mysql-4.007.tar.gz
+cd        DBD-mysql-4.007; perl Makefile.PL; make install; cd ..
+rm -rf    DBD-mysql-4.007
+
+* 設定ファイル
+
+（参考設定をとりあえずそのまま使うなら）
+cp $MOBA_DIR/conf/sample/my.cnf /etc/
+/etc/init.d/mysql restart
+
+exit
+
+* 基本テーブル作成
+
+cat $MOBA_DIR/conf/createdb.sql | mysql -uroot
+
+
+### 起動
+
+sudo /usr/local/apache/bin/apachectl start
+daemonctl start
+
+携帯実機か UA 偽装したPCブラウザでアクセスしてください。デフォルトではプライベートアドレスと localhost をローカル環境のアドレスとして設定してありますが、webサーバがLAN内にない場合は、適宜接続元IPを ipident.conf に追加してください。（ローカル環境からの接続と認識されないと UA 偽装では接続できません。）
+
+PCブラウザからアクセスする場合は uid として、x-dcmguid(docomo), x-up-subno(au), x-jphone-uid(softbank) ヘッダを渡すのがいいですが、難しい場合は user-agent の後ろに ;U={UID} を付ければ上記ヘッダで渡したのと同じように処理されます。（ipident.conf で'I'になっている接続元からのみ）

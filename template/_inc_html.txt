@@ -1,0 +1,32 @@
+
+#---------------------------------------- 
+
+$INCDEF:header$
+<div align="center" style="background-color:$STY:color-base$">$INC:small$<font color="#ffffff">$=T:title$</font>$INC:/small$</div>
+${INC:color-bar:size=1,color=$STY:color-base$}$
+$INC:space:size=4$
+$/INCDEF$
+
+#---------------------------------------- 
+
+$INCDEF:footer$
+<hr size="2" color="$STY:color-base$">
+$INC:small$
+<a href="$=b:BasePath$/" accesskey="0">ﾄｯﾌﾟ</a>
+$INC:/small$
+$/INCDEF$
+
+#---------------------------------------- 
+# その他
+
+$INCDEF:nocache$
+<meta http-equiv="Content-Type" content="text/html; charset=Shift_JIS">
+<meta http-equiv="Cache-Control" content="max-age=0">
+$/INCDEF$
+
+$INCDEF:space$<img src="/i/dot.gif" height="$=T:size$" width="1"><br>$/INCDEF$
+
+$INCDEF:color-bar$$DOM:d,a$<div style="background-color:$=T:color$"><img src="/i/dot.gif" height="$=T:size$" width="1"></div>$/DOM$$DOM:v$<hr color="$=T:color$" size="$=T:size$">$/DOM$$/INCDEF$
+
+$INCDEF:small$$=b:SMALL_TAG$$/INCDEF$
+$INCDEF:/small$$=b:SMALL_TAG_END$$/INCDEF$

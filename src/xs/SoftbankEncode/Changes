@@ -1,0 +1,6 @@
+Revision history for Perl extension SoftbankEncode.
+
+0.01  Sun Feb  4 06:53:59 2007
+	- original version; created by h2xs 1.22 with options
+		-An SoftbankEncode
+

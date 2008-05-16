@@ -1,0 +1,6 @@
+Revision history for Perl extension MobaConf.
+
+0.01  Tue Dec  9 05:28:18 2003
+	- original version; created by h2xs 1.22 with options
+		-AXn MobaConf
+

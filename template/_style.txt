@@ -1,0 +1,13 @@
+
+default {
+	attr-body:     
+	color-disable: #999999
+	color-base:    #ff6633
+}
+regist {
+}
+diary {
+}
+user {
+}
+

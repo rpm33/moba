@@ -1,0 +1,18 @@
+
+ドキュメントは docs/ 配下に。
+
+1.about.txt     : 概要
+2.install.txt   : 動作環境とインストール方法
+3.system.txt    : システム構成
+4.mcode.txt     : 絵文字モジュール
+5.mtemplate.txt : テンプレートモジュール
+6.other.txt     : その他
+
+AUTHOR
+    Shuhei Kawasaki
+
+COPYRIGHT
+    2003-2008 DeNA Co., Ltd.
+
+LICENSE
+    This library is free software, licensed under the same terms with Perl.

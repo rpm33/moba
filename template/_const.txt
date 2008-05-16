@@ -1,0 +1,3 @@
+title     : MobaSiF
+serv_name : MobaSiF
+mail_dom  : localhost

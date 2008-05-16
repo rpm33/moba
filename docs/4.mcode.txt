@@ -1,0 +1,73 @@
+
+############################ 絵文字処理 ##########################
+
+### 関連モジュール
+
+* Mcode.pm
+
+  絵文字変換モジュール。詳細は後述。
+
+* Kcode.pm
+
+  SJIS,EUC,JIS の文字変換。特に絵文字は関係ありません。
+（強いていえば、docomo 絵文字がメール用 jis に変換できることくらい。）
+  Jcode.pm Encode.pm に置き換えても全く問題ないのですが、
+  既存サービスでの使用箇所が多いので一応残しておきました。（一応高速です）
+
+* SoftbankEncode.pm
+
+  Softbank UTF8 <=> SJIS の絵文字変換を行います。
+  Encode::JP::Mobile の x-utf8-softbank <=> x-sjis-softbank 変換と同等内容
+
+
+### 絵文字の保存形式
+
+・iモード、ezweb の絵文字はコードがぶつからないのでそのまま無変換で通す。
+・softbank の絵文字は 1b 2f XX YY 0f で、XX YY の部分が絵文字の種類を表す。
+  XX の部分が同じ絵文字が続く場合は XX YY1 YY2 ... と連続で入ってくる。
+  これだと、最悪絵文字１文字につき５バイト確保しないといけなくて
+  効率が悪いので、0b XX YY の３バイト固定の形式に変換している。
+  （0b を選んだの理由は適当。）
+・上記のとおり、iモード、ezweb は無変換、softbank は３バイト固定に
+  変換したものを内部形式と呼んでいて、DB 上でもこの状態で保存。
+  キャリア間の絵文字変換もこの内部形式を経由して行っている。
+
+・なお、softbank の sjis の絵文字は XX YY の部分に "><' などが入ってくるので、
+  テンプレート処理などで渡すときは厄介です。
+（MTemplate.pm は softbank 絵文字を認識するので普通に処理できます。）
+（utf8 ベースで処理すればいいという話ではありますが。）
+
+
+### Mcode.pm
+
+$_::MCODE = new Mcode($_::MCODE_DIR);
+
+  絵文字変換オブジェクトの初期化
+
+$uni_emoji_text = $_::MCODE->any2u($emoji_text);
+  
+  各キャリアの絵文字を内部形式に変換
+（入力キャリアは特に指定する必要なし）
+  
+$emoji_text = $_::MCODE->any2u($uni_emoji_text, $convert_map_name);
+
+  $_::MCODE_DIR/$convert_map_name.dat を使って各キャリア用に変換
+
+
+フレームワーク上では、下記の処理が含まれているので、
+絵文字変換処理をページ処理内で書く必要は通常ありません。
+
+・Request.pm  で絵文字を内部形式に変換
+・Response.pm で内部形式を各キャリア用に変換
+
+絵文字変換テーブルのファイルは下記。
+
+  data/dat/mcode/
+    D.dat => docomo 用
+    A.dat => ezweb 用
+    V.dat => softbank 用
+    H.dat => 半角変換用
+  
+  変換テーブルの内容を変えたい場合は script2/mcode/map/ に変換表があるので、
+  変換内容を修正して make_mcode_dat.pl を実行すれば OK です。
+

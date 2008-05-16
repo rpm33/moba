@@ -1,0 +1,23 @@
+<!-- POST でリダイレクトが必要になった場合に使用 -->
+<html>
+<head>
+<title>$CON:title$</title>
+$INC:nocache$
+</head>
+<body $STY:attr-body$>
+$INC:header:title=次のページへ進みます$
+$INC:small$
+
+次のページへ進みます。OKボタンを押してください。<br>
+<center>
+<form action="$=b:BaseURL$/$=h:Func$" method="POST" utn>
+<input type="hidden" name="_CODE" value="あ">
+$=b:Hidden$
+<input type="submit" value="O K">
+</form>
+</center>
+
+$INC:/small$
+$INC:footer$
+</body>
+</html>

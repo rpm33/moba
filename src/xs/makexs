@@ -1,0 +1,9 @@
+#!/bin/sh
+
+cd ${1};
+rm -f Makefile
+perl Makefile.PL OPTIMIZE="-O2"
+make
+make install
+make clean
+rm -f Makefile.old

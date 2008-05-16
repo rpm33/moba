@@ -1,0 +1,26 @@
+
+############################ その他 ##########################
+
+* 開発の流れ
+
+conf/pages.conf にページの定義を追加
+conf/main.conf  に必要な DB ハンドル設定を追加
+pm/Page/****.pm を追加
+template/_system/****/****.html を追加
+必要なら script/batch/, script/daemon/ にもスクリプト作成
+
+
+* ステータスの追加
+
+ステータスはサービスの要求に応じて適宜修正。関連修正箇所は下記。
+
+conf/main.conf
+pm/Page/Main.pm
+pm/Page/Base.pm
+pm/UserData.pm
+
+
+* その他
+
+サンプルを動かしながらソースを見たほうが早いと思います。
+

@@ -1,0 +1,8 @@
+Changes
+Makefile.PL
+MANIFEST
+ppport.h
+README
+SoftbankEncode.pm
+SoftbankEncode.xs
+t/1.t

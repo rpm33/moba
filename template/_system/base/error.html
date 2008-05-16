@@ -1,0 +1,22 @@
+<!-- エラー全般 -->
+$DOM:v$<!!--STATUS=ERR800-->$/DOM$
+<!!--ERROR=$if(CODE){$$=h:CODE$$}else{$9999$}$-->
+<html>
+<head>
+<title>$CON:title$</title>
+$INC:nocache$
+</head>
+<body $STY:attr-body$>
+$INC:header:title=エラー$
+$INC:small$
+
+$ if (DEBUG_MSG) { $
+$=hn:DEBUG_MSG$<br>
+$ } else { $
+システムエラーです。
+$ } $
+
+$INC:/small$
+$INC:footer$
+</body>
+</html>

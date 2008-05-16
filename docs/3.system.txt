@@ -1,0 +1,107 @@
+
+############################ システム構成 ##########################
+
+
+* ディレクトリ構成
+
+$ENV{MOBA_DIR}/
+  conf/     設定ファイル
+  docs/     ドキュメント
+  fcgi/     各種 fcgi を置く
+  html/     DocumentRoot
+  pm/       モジュール
+    Page/   各種ページの処理
+    Func/   共通処理はここにモジュール化
+    Util/   サービスとの依存関係の少ないモジュール（use MobaConf しないもの）
+  script/   各種スクリプト
+    batch/  crontab で実行されるスクリプト
+    daemon/ 各種 daemon スクリプト（ path を通してある ）
+    tool/   開発用スクリプト      （ path を通してある ）
+  script2/  メンテナンス用スクリプトの置き場
+  src/      C などの要コンパイルなソース
+    xs/     xs モジュール
+  template/ コンパイル前のテンプレ
+  
+  data/     データディレクトリ
+    dat/      システムで使用する各種データ
+    run/      システム稼動用
+    tmp/      システム稼動用
+    log/      ログディレクトリ
+    queue/    キュー処理用のデータ
+    html_bin/ コンパイル済みのテンプレートバイナリ
+
+
+* リクエスト処理の流れ
+
+conf/rewrite.conf で下記のように読み変えて処理されます。
+
+（機能系ページ）
+http://HOST/(.URLINFO/)?(_FUNC)?
+  => /index.fcgi?f=FUNC&_u=URLINFO
+（静的ページ）
+http://HOST/(.URLINFO/)?PATH/TO.html
+  => /index.fcgi?f=page&page=PATH/TO&_u=URLINFO
+  ↑静的ページも共通変数はテンプレート変数として使用可能。
+
+* 上記にマッチしないものは html/ の内容が返される。
+
+fcgi/index.fcgi
+	=> pm/Page/Main.pm
+		=> pm/MobileEnv.pm
+			- 携帯特有の情報を %ENV{MB_****} に入れる
+		=> pm/Request.pm
+			- リクエストを取得して $_::F に入れる
+			- 絵文字 ⇒ 内部形式に変換 ( => Mcode.pm )
+		=> pm/UserData.pm
+			- ユーザ情報を取得して $_::U に入れる
+		=> pm/Page/****.pm
+			- pm/HTMLTemplate.pm ( => MTemplate.pm )
+				- テンプレート処理
+			- pm/Response.pm
+				- ページ出力 or リダイレクト
+				- iモードID要求の埋め込み ( => Util/DoCoMoGUID.pm )
+				- 絵文字変換 ( => Mcode.pm )
+
+
+* 設定ファイルの読まれ方
+
+use MobaMail
+  ($ENV{MOBA_DIR} に応じて)
+  => conf/main.conf
+  * 実際のサービスは main.conf から各種 conf をロードします。
+
+index.fcgi
+  => conf/pages.conf（function テーブル）
+
+/usr/local/apache/conf/httpd.conf
+  => conf/httpd.conf
+    => conf/rewrite.conf
+
+pm/MobileEnv.pm
+  => conf/ipident.conf       各キャリアのIP設定
+  => conf/ipident_local.conf サービス固有のIP設定
+
+
+* 設定値、グローバル変数
+
+$_::***** 設定値
+$_::F     入力フォームデータ（絵文字を内部形式に変換済み）
+$_::U     ユーザ情報        （絵文字を内部形式に変換済み）
+$_::MCODE 絵文字変換オブジェクト
+
+
+
+
+* xs モジュール
+
+MobaConf       : use MobaConf だけで基本設定が読み込めるように。xs ではない。
+MTemplate      : テンプレモジュール
+Mcode          : 絵文字変換モジュール
+
+-- 以下、一般的なモジュールで代替は効くが既存システムで
+   使われているために同梱したもの。それなりに高速です。
+
+Kcode          : sjis/euc/jis 変換モジュール。
+SoftbankEncode : softbank sjis <=> utf8 絵文字変換モジュール
+HTMLFast       : url エンコードと <>&" のエスケープのみ。
+

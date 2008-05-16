@@ -1,0 +1,114 @@
+#!/usr/bin/perl
+
+use MobaConf;
+use MLog;
+
+if ($ARGV[0] eq 'start') {
+	daemonctl_start();
+}
+elsif ($ARGV[0] eq 'stop') {
+	daemonctl_stop();
+}
+elsif ($ARGV[0] eq 'restart') {
+	daemonctl_restart();
+}
+elsif ($ARGV[0] eq 'status') {
+	daemonctl_status();
+}
+elsif ($ARGV[0] eq 'check') {
+	daemonctl_check();
+}
+else {
+	daemonctl_usage();
+}
+
+#-----------------------------------------------------------
+
+sub daemonctl_usage() {
+	print "Usage: daemonctl [ start | stop | restart | status | check ]\n";
+}
+
+#-----------------------------------------------------------
+
+sub daemonctl_start() {
+	for my $daemon (sort keys(%Daemon::CONF)) {
+		my $val = $Daemon::CONF{$daemon};
+		if ($val == 2) {
+			system("$daemon start");
+		}
+	}
+}
+
+#-----------------------------------------------------------
+
+sub daemonctl_stop() {
+	for my $daemon (sort keys(%Daemon::CONF)) {
+		my $val = $Daemon::CONF{$daemon};
+		if ($val) {
+			system("$daemon stop");
+		}
+	}
+}
+
+#-----------------------------------------------------------
+
+sub daemonctl_restart() {
+	for my $daemon (sort keys(%Daemon::CONF)) {
+		my $val = $Daemon::CONF{$daemon};
+		if      ($val == 1) {
+			system("$daemon condrestart");
+		} elsif ($val == 2) {
+			system("$daemon restart");
+		}
+	}
+}
+
+#-----------------------------------------------------------
+
+sub daemonctl_status() {
+	my $error = 0;
+	for my $daemon (sort keys(%Daemon::CONF)) {
+		my $val = $Daemon::CONF{$daemon};
+		if ($val == 0) {
+#			print "[-] $daemon\n";
+		}
+		if ($val == 1) {
+			for my $line (`$daemon status`) {
+				print "[1] $line";
+			}
+			$error = 1 if ($? == -1); # ハングならエラー
+		}
+		if ($val == 2) {
+			for my $line (`$daemon status`) {
+				print "[2] $line";
+			}
+			$error = 1 if ($? != 1); # 正常稼動以外ならエラー
+		}
+	}
+	exit($error);
+}
+
+#-----------------------------------------------------------
+
+sub daemonctl_check() {
+	my (@error, @daemons);
+	for my $daemon (sort keys(%Daemon::CONF)) {
+		my $val = $Daemon::CONF{$daemon};
+		if ($val == 2) {
+			`$daemon status`;
+			$res = $?;
+			push(@error,   $daemon) if ($res == 0);
+			push(@daemons, $daemon);
+		}
+	}
+	if (scalar(@error)) {
+		my $daemons = join(',', @error);
+		MLog::write("$_::LOG_DIR/daemonctl", "ERR\t$daemons");
+		print "ERROR: $daemons\n";
+	} else {
+		my $daemons = join(',', @daemons);
+		MLog::write("$_::LOG_DIR/daemonctl", "OK\t$daemons");
+		print "OK: $daemons\n";
+	}
+}
+

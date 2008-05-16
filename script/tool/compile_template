@@ -1,0 +1,27 @@
+#!/usr/bin/perl
+
+# HTMLテンプレート, メールテンプレートをコンパイルして
+# バイナリ形式のテンプレートファイルを出力する
+
+use strict;
+
+use MobaConf;
+use MobileTplCompiler;
+use FileHandle;
+use File::Spec;
+
+my $refresh = 0;
+if ($ARGV[0] eq '--refresh') {
+	$refresh = 1;
+	shift @ARGV;
+}
+my $path =shift @ARGV;
+
+if ($path) {
+	$path = File::Spec->rel2abs($path);
+	my $tmp = quotemeta($_::TEMPLATE_DIR);
+	$path =~ s/^$tmp//;
+}
+
+MobileTplCompiler::compile_all($path, $refresh);
+
